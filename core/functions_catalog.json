@@ -1,0 +1,21 @@
+[
+  {
+    "name": "get_weather",
+    "description": "Retorna a previsão do tempo para uma cidade.",
+    "parameters": {
+      "city": "Nome da cidade"
+    },
+    "returns": "Um dicionário com temperatura, clima e umidade.",
+    "code": "def get_weather(city): return {'temp': '28°C', 'clima': 'Ensolarado', 'umidade': '60%'}"
+  },
+  {
+    "name": "calculate_sum",
+    "description": "Soma dois números inteiros.",
+    "parameters": {
+      "a": "Primeiro número",
+      "b": "Segundo número"
+    },
+    "returns": "A soma dos dois números.",
+    "code": "def calculate_sum(a, b): return a + b"
+  }
+]
