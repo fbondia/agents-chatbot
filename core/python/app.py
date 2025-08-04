@@ -16,27 +16,35 @@ from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, Too
 
 from langchain_core.messages import BaseMessage
 
-def pretty_print(messages: list[BaseMessage]):
-    print("\n===== CONVERSA =====\n")
-    for msg in messages:
-        if msg.__class__.__name__ == "SystemMessage":
-            print("🟦 [System]")
-        elif msg.__class__.__name__ == "HumanMessage":
-            print("🧑 [Usuário]")
-        elif msg.__class__.__name__ == "AIMessage":
-            print("🤖 [Assistente]")
-        elif msg.__class__.__name__ == "ToolMessage":
-            print(f"🛠️ [Tool: {msg.name}]")
-        else:
-            print("❓ [Outro Tipo]")
 
-        print(msg.content)
-        print("-" * 40)
-    print("=====================\n")
+
+from langchain.chains import ConversationChain
+from langchain.prompts import PromptTemplate
+from langchain.memory import ConversationBufferMemory
+
+
 
 
 _ = load_dotenv(find_dotenv()) 
 openai.api_key  = os.environ['OPENAI_API_KEY']
+
+def pretty_print(messages: list[BaseMessage]):
+    print("\n===== CONVERSA =====\n")
+    for msg in messages:
+        if msg.__class__.__name__ == "SystemMessage":
+            print("[System]")
+        elif msg.__class__.__name__ == "HumanMessage":
+            print("[Usuário]")
+        elif msg.__class__.__name__ == "AIMessage":
+            print("[Assistente]")
+        elif msg.__class__.__name__ == "ToolMessage":
+            print(f"[Tool: {msg.name}]")
+        else:
+            print("[Outro Tipo]")
+
+        print(msg.content)
+        print("-" * 40)
+    print("=====================\n")
 
 # === Implementações reais das funções ===
 @tool("get_weather", description="Retorna a previsão do tempo para uma cidade específica.")
@@ -150,11 +158,122 @@ Você pode fazer várias buscas (tanto de uma vez quanto em sequência).
 Só procure informações quando tiver certeza do que está buscando.
 Se precisar buscar algo antes de fazer uma pergunta de acompanhamento, está autorizado a fazer isso!"""
 
-#llm = ChatOllama(model="mistral")
-llm = ChatOpenAI(model="gpt-3.5-turbo")  #reduce inference cost
+ollama = ChatOllama(model="mistral")
+llm = ChatOpenAI(model="gpt-3.5-turbo")
 abot = Agent(llm, tool_functions, system=prompt)
 
-messages = [HumanMessage(content="Qual é a temperatura em Barueri?")]
-result = abot.graph.invoke({"messages": messages})
+#messages = [HumanMessage(content="Qual é a temperatura em Barueri?")]
+#result = abot.graph.invoke({"messages": messages})
 
 #print(result)
+
+
+
+# ======== Catálogo de Funções =========
+tools = {
+    "agendar_sessao": {
+        "description": "Realiza um agendamento de sessão ou consulta",
+        "parameters": {
+            "nome": {
+                "type": "string"
+            },
+            "data": {
+                "type": "date"
+            }
+        }
+      },
+    "cancelar_sessao": {
+        "description": "Cancela um agendamento de sessão ou consulta",
+        "parameters": {
+            "nome": {
+                "type": "string"
+            },
+            "data": {
+                "type": "date"
+            },
+        }
+    },
+    "registrar_pagamento": {
+        "description": "Registra o pagamento de uma consulta ou sessão",
+        "parameters": {
+            "nome": {
+                "type": "string"
+            },
+            "data": {
+                "type": "date",
+            },
+            "valor": {
+                "type": "currency"
+            }
+        }
+    },
+}
+
+# ======== Prompt de Roteamento =========
+prompt_fn = """
+Você é um roteador de chamadas de função. Escolha qual função atende à solicitação do usuário.
+
+Funções disponíveis:
+{catalog}
+
+Mensagem do usuário:
+{input}
+
+Retorne apenas o nome exato da função sem nenhuma outra informação. 
+Se não houver nenhuma função que atende à solicitação responda apenas "UNKNOWN".
+
+Sua resposta:
+"""
+
+prompt_p = """
+Você é um roteador de chamadas de função. Preencha os parâmetros da função {function} a partir da solicitação do usuário.
+
+Parâmetros disponíveis:
+{parameters}
+
+Mensagem do usuário:
+{input}
+
+Retorne um JSON com duas chaves:
+- "function": nome da função
+- "parameters": dicionário com os parâmetros para a função (ou vazio se não for necessário)
+
+Omita parâmetros com valores incompletos ou inválidos.
+Não inclua qualquer tipo de comentário na resposta.
+Retorne apenas os parâmetros com os valores válidos preenchidos sem nenhuma outra informação.
+
+Exemplo:
+{{
+  "function": "agendar_sessao",
+  "parameters": {{
+     "nome": "João",
+     "data": "2025-01-01"
+  }}
+}}
+
+Sua resposta:
+"""
+
+# ======== LLM + Cadeia de Roteamento =========
+llm = ChatOllama(model="mistral")
+
+# ======== Teste com mensagens =========
+entradas = [
+    "Gostaria de agendar uma sessão para o Fabiano no dia 10/04/2025",
+    "Olá, meu nome é Fabiano, me cumprimente!",
+    "Qual a média de 10, 20 e 30?",
+    "Quero cancelar a sessão da Roberta no dia 13.",
+    "Registre o pagamento do Paulo no valor de R$ 200",
+    "Geraldo pagou o que devia"
+]
+
+for entrada in entradas:
+    print("🟢 Entrada:", entrada)
+    output = llm.invoke(prompt_fn.format(input=entrada, catalog='\n'.join(f"- {chave}" for chave in tools.keys())))
+    choice = output.content.strip()
+    print(choice)
+    if tools.get(choice):
+      output = llm.invoke(prompt_p.format(input=entrada, function=choice, parameters=json.dumps(tools[choice]["parameters"], indent=2)))
+      print(output.content)
+    
+    print("----")
