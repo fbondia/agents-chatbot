@@ -2,14 +2,7 @@ import 'dotenv/config';
 
 import { v4 as uuidv4 } from "uuid";
 
-import { z } from "zod";
-
 import { ChatOpenAI } from "@langchain/openai";
-
-import { catalogTool } from "./tools/catalogTool.js";
-import { weatherTool } from "./tools/weatherTool.js";
-import { currencyTool } from "./tools/currencyTool.js";
-//import { ChatMessageHistory } from "@langchain/core/memory";
 
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
@@ -21,9 +14,13 @@ import {
     trimMessages,
 } from "@langchain/core/messages";
 
-import { DynamicStructuredTool } from "@langchain/core/tools";
-
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
+
+import { catalogTool } from "./tools/catalogTool.js";
+import { weatherTool } from "./tools/weatherTool.js";
+import { currencyTool } from "./tools/currencyTool.js";
+
+
 
 import {
     START,
@@ -45,22 +42,6 @@ const chatId = () => ({
     }
 });
 
-const niceTool = new DynamicStructuredTool({
-    name: "consultar_temperatura",
-    description: "Consulta a temperatura",
-    schema: z.object({
-        data: z
-            .object({
-                cidade: z.string()
-            })
-            .array(),
-    }),
-    func: async ({ data }) => {
-        return "8 graus";
-    },
-});
-
-
 const trimmer = trimMessages({
     maxTokens: 4,
     strategy: "last",
@@ -79,8 +60,8 @@ const promptTemplate = ChatPromptTemplate.fromMessages([
 const chatAgent = createReactAgent({
     llm,
     tools: [catalogTool, weatherTool, currencyTool],
-    //chatHistory: memory,
-    //chatHistoryTransformer,
+    prompt: promptTemplate,
+    chatHistoryTransformer: trimmer
 });
 
 const GraphAnnotation = Annotation.Root({
